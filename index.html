@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="uz">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Click Speed Test — Soft Pastel</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@600;800;900&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --bg:#fcfdff; /* very light */
+      --panel:#ffffff;
+      --muted:#8a92a6; /* soft gray-blue */
+      --accent:#9bd5ff; /* pastel blue */
+      --accent-2:#ffd9a8; /* soft peach */
+      --text:#0f1724; /* deep slate */
+    }
+
+    *{box-sizing:border-box;user-select:none;-webkit-user-select:none;-moz-user-select:none;-ms-user-select:none}
+    html,body{height:100%;margin:0;font-family:Inter,system-ui,Arial;background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased}
+
+    .wrap{max-width:420px;margin:20px auto;padding:16px}
+    h1{margin:0;font-size:20px;font-weight:900;text-align:center}
+    p.lead{margin:8px 0 18px;text-align:center;color:var(--muted);font-weight:600}
+
+    .card{background:var(--panel);padding:16px;border-radius:14px;box-shadow:0 8px 20px rgba(16,24,40,0.06)}
+
+    .round-area{display:flex;justify-content:center;align-items:center;margin:12px 0}
+    .round{
+      width:200px;height:200px;border-radius:50%;background:linear-gradient(180deg,var(--accent),var(--accent-2));
+      display:flex;align-items:center;justify-content:center;flex-direction:column;color:var(--text);font-weight:900;
+      box-shadow:0 10px 30px rgba(13,20,33,0.08), inset 0 -8px 14px rgba(255,255,255,0.35);
+      cursor:pointer; transition:transform .08s ease, box-shadow .12s ease;
+    }
+    .round:hover{transform:translateY(-3px);box-shadow:0 18px 40px rgba(13,20,33,0.08)}
+    .round:active{transform:scale(.985)}
+
+    .big{font-size:40px}
+    .small{font-size:13px;color:rgba(15,23,36,0.6);margin-top:6px}
+
+    .controls{display:flex;gap:8px;justify-content:center;align-items:center;margin-top:10px}
+    select,button{border:none;padding:10px 12px;border-radius:10px;font-weight:800}
+    select{background:linear-gradient(180deg,#ffffff,#fbfbff);border:1px solid rgba(15,23,36,0.06);color:var(--text)}
+    button.secondary{background:transparent;color:var(--text);border:1px solid rgba(15,23,36,0.06)}
+
+    .mini-stats{display:flex;justify-content:space-between;margin-top:12px}
+    .stat{flex:1;text-align:center}
+    .label{font-size:12px;color:var(--muted)}
+    .value{font-size:16px;font-weight:900;margin-top:6px}
+
+    .history{margin-top:14px;border-top:1px solid #f1f3f8;padding-top:10px;color:var(--muted);font-size:14px}
+
+    @media(min-width:700px){.wrap{max-width:540px} .big{font-size:44px} .round{width:220px;height:220px}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Click Speed Test</h1>
+    <p class="lead">Soft pastel palitra — mobilga mos va ko‘zni charchatmaydi. Bosganingizda avtomatik boshlansin.</p>
+
+    <div class="card">
+      <div class="round-area">
+        <div id="roundBtn" class="round" role="button" tabindex="0" aria-pressed="false">
+          <div class="big" id="cps">0.00</div>
+          <div class="small">CPS • <span id="timeLeft">5.00</span>s</div>
+        </div>
+      </div>
+
+      <div class="controls">
+        <select id="durationSelect" aria-label="Test davomiyligi">
+          <option value="5">5s</option>
+          <option value="10">10s</option>
+          <option value="15">15s</option>
+        </select>
+        <button id="resetBtn" class="secondary">Qayta</button>
+      </div>
+
+      <div class="mini-stats">
+        <div class="stat"><div class="label">Jami</div><div class="value" id="total">0</div></div>
+        <div class="stat"><div class="label">O'rtacha CPS</div><div class="value" id="avg">0.00</div></div>
+        <div class="stat"><div class="label">Eng yuqori</div><div class="value" id="peak">0.00</div></div>
+      </div>
+
+      <div class="history" id="history">Hech qanday natija yo'q</div>
+    </div>
+  </div>
+
+  <script>
+    const roundBtn = document.getElementById('roundBtn');
+    const resetBtn = document.getElementById('resetBtn');
+    const durationSelect = document.getElementById('durationSelect');
+    const timeLeftEl = document.getElementById('timeLeft');
+    const cpsEl = document.getElementById('cps');
+    const totalEl = document.getElementById('total');
+    const avgEl = document.getElementById('avg');
+    const peakEl = document.getElementById('peak');
+    const historyEl = document.getElementById('history');
+
+    let duration = parseFloat(durationSelect.value);
+    let running = false;
+    let startTime = null;
+    let timer = null;
+    let clicks = 0;
+    let times = [];
+
+    function update(){
+      const now = performance.now();
+      const elapsed = startTime ? (now - startTime)/1000 : 0;
+      const remaining = Math.max(0, duration - elapsed);
+      timeLeftEl.textContent = remaining.toFixed(2);
+      totalEl.textContent = clicks;
+      const avg = elapsed > 0 ? clicks/elapsed : 0;
+      avgEl.textContent = avg.toFixed(2);
+      cpsEl.textContent = avg.toFixed(2);
+
+      let peak = 0;
+      for(let i=0;i<times.length;i++){
+        let j=i; while(j<times.length && times[j]-times[i] <= 1000) j++;
+        peak = Math.max(peak, j-i);
+      }
+      peakEl.textContent = peak.toFixed(2);
+
+      if(running && elapsed >= duration){ stop(); }
+    }
+
+    function start(){
+      if(running) return;
+      duration = parseFloat(durationSelect.value);
+      running = true; clicks = 0; times = []; startTime = performance.now();
+      roundBtn.setAttribute('aria-pressed','true');
+      timer = setInterval(update, 50);
+    }
+    function stop(){
+      running = false; clearInterval(timer); roundBtn.setAttribute('aria-pressed','false');
+      saveResult();
+    }
+    function reset(){
+      running = false; clearInterval(timer); clicks = 0; times = []; startTime = null;
+      timeLeftEl.textContent = parseFloat(durationSelect.value).toFixed(2);
+      cpsEl.textContent = '0.00'; avgEl.textContent = '0.00'; peakEl.textContent = '0.00'; totalEl.textContent = '0';
+    }
+
+    function register(){
+      // If not running, start automatically on first click/tap
+      if(!running){ start(); }
+      clicks++; times.push(performance.now()); update();
+    }
+
+    // Pointer/click/touch handlers
+    roundBtn.addEventListener('pointerdown', (e)=>{ e.preventDefault(); register(); });
+    roundBtn.addEventListener('touchstart', (e)=>{ e.preventDefault(); register(); });
+    roundBtn.addEventListener('mousedown', (e)=>{ e.preventDefault(); register(); });
+
+    // keyboard support
+    roundBtn.addEventListener('keydown', (e)=>{ if(e.code === 'Space' || e.code === 'Enter'){ e.preventDefault(); register(); }});
+    window.addEventListener('keydown', (e)=>{ if(e.code === 'Space' && running){ e.preventDefault(); register(); }});
+
+    resetBtn.addEventListener('click', reset);
+    durationSelect.addEventListener('change', ()=>{ if(!running){ duration = parseFloat(durationSelect.value); timeLeftEl.textContent = duration.toFixed(2); } });
+
+    function saveResult(){
+      const elapsed = (performance.now() - startTime)/1000;
+      const avg = elapsed > 0 ? clicks/elapsed : 0;
+      const peak = parseFloat(peakEl.textContent) || 0;
+      const rec = `${new Date().toLocaleTimeString()} — ${clicks} clicks • ${avg.toFixed(2)} CPS • ${peak.toFixed(2)} peak`;
+      const cur = localStorage.getItem('simple_cps') ? JSON.parse(localStorage.getItem('simple_cps')) : [];
+      cur.unshift(rec); if(cur.length > 6) cur.length = 6; localStorage.setItem('simple_cps', JSON.stringify(cur)); renderHistory();
+    }
+    function renderHistory(){
+      const cur = localStorage.getItem('simple_cps') ? JSON.parse(localStorage.getItem('simple_cps')) : [];
+      if(cur.length === 0) historyEl.textContent = "Hech qanday natija yo'q";
+      else historyEl.innerHTML = cur.map(r => `<div style="padding:6px 0;border-bottom:1px solid #f1f3f8;font-weight:700;color:var(--muted)">${r}</div>`).join('');
+    }
+
+    // init
+    (function init(){ timeLeftEl.textContent = parseFloat(durationSelect.value).toFixed(2); renderHistory(); update(); })();
+  </script>
+</body>
+</html>
